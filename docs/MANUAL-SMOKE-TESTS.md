@@ -78,6 +78,66 @@ this check proves the flag names still match the installed Playwright CLI.
 
 ---
 
+## 3. End-to-end CLI walking skeleton (`record` → `journey list` → `journey run`)
+
+**Why it is manual (in part).** `record` opens `playwright codegen`'s
+interactive Inspector, same as items 1-2 - it needs a human clicking in a
+real browser window. This environment (a headless Windows agent sandbox, no
+attached display) cannot drive that window, so the `record` half of this item
+was **not run** here and needs a human. The `journey list` / `journey show` /
+`journey run` / `journey delete` half **was run** in this environment, using a
+hand-seeded `.qamachine/journeys/<id>.json` file in place of a real
+recording (a valid substitute here since those commands never call the
+recorder - only `record` does), against the real `https://example.com` over
+the network with a real, headless Chromium instance.
+
+**Steps**
+
+1. `npm run build`
+2. `node dist/bin/qamachine.js record https://example.com --name smoke-test`
+3. In the Inspector window that opens: interact with the page a little, then
+   close the browser window to end the session.
+4. `node dist/bin/qamachine.js journey list` - the journey from step 2 should
+   appear.
+5. `node dist/bin/qamachine.js journey run <id>` (the id printed in step 4) -
+   should replay headless and report `PASSED`.
+
+**Pass criteria.** Step 4 shows the recorded journey in the table. Step 5
+prints one colored `PASS`/`FAIL` line per step and a summary line, and exits
+`0` on an all-passing run / `1` on any failing step.
+
+**What was actually verified in this environment (steps 4-5 only, journey
+hand-seeded instead of step 2-3's real recording):**
+
+```
+$ node dist/bin/qamachine.js journey list
+ID             NAME        START URL            STEPS  CREATED AT
+smoke-journey  smoke-test  https://example.com  2      2026-01-01T00:00:00.000Z
+
+$ node dist/bin/qamachine.js journey run smoke-journey
+  PASS  step 1 (s1) 2975ms
+  PASS  step 2 (s2) 97ms
+PASSED — 2 passed, 0 failed, 0 skipped (2 steps, 3662ms)
+$ echo $?
+0
+```
+
+A deliberately-failing assertion step was also run to confirm the failure
+path: `FAIL` printed in red for the failing step, a red `FAILED` summary
+line, and exit code `1`. `--keep-trace` was confirmed to actually write a
+`.zip` file under `<home>/traces/`, and `--json` output on both `journey
+list` and `journey run` was confirmed to be valid, well-formed JSON
+(including the derived `status` field on the run result, which is not an
+own-enumerable property of the domain object and needs explicit handling in
+`JourneyRunPresenter.toJson` to appear at all).
+
+**Still needs a human:** steps 2-3 (the actual `playwright codegen` Inspector
+session) - re-run this item's steps 1-5 in full end-to-end, unmodified, the
+next time a human is available with a real Playwright dependency bump or
+before a release.
+
+---
+
 ## 3. `--load-storage` actually restores a logged-in session
 
 **Why it is manual.** Requires real credentials on a real site.

@@ -4,7 +4,7 @@
   "description": "Blackbox Playwright-powered CLI for recording user journeys, saving them as reusable templates, grouping them into playbooks, and running them under locally-registered user profiles.",
   "type": "module",
   "bin": {
-    "qamachine": "./dist/main.js"
+    "qamachine": "./dist/bin/qamachine.js"
   },
   "engines": {
     "node": ">=18"
