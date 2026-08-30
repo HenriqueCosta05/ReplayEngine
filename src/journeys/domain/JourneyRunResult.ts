@@ -17,8 +17,9 @@ export interface CreateJourneyRunResultInput {
 /**
  * The record of one execution of a `Journey`. `status` is a derived getter,
  * never an independently settable field, so it is structurally impossible to
- * construct a `'passed'` result that contains a failed step: the moment any
- * `stepResults[i].status === 'failed'`, `status` flips to `'failed'`.
+ * construct a `'passed'` result that contains a failed step or a top-level
+ * run error: the moment any `stepResults[i].status === 'failed'`, or the
+ * `error` field is set, `status` flips to `'failed'`.
  */
 export class JourneyRunResult {
   readonly id: string;
@@ -41,9 +42,14 @@ export class JourneyRunResult {
     this.error = input.error;
   }
 
-  /** `'failed'` iff any step result failed, else `'passed'`. */
+  /**
+   * `'failed'` iff any step result failed OR the top-level `error` field is
+   * set (a run can fail before any step executes, e.g. the browser fails to
+   * launch - that must never present as `'passed'`); otherwise `'passed'`.
+   */
   get status(): JourneyRunStatus {
-    return this.stepResults.some((result) => result.status === 'failed') ? 'failed' : 'passed';
+    const hasFailedStep = this.stepResults.some((result) => result.status === 'failed');
+    return hasFailedStep || Boolean(this.error) ? 'failed' : 'passed';
   }
 
   static create(input: CreateJourneyRunResultInput): JourneyRunResult {
