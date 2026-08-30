@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.qamachine/traces/
+*.log
+.DS_Store
