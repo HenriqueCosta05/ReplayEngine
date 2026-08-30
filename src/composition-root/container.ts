@@ -25,6 +25,15 @@ import { ListProfilesUseCase } from '../profiles/application/use-cases/ListProfi
 import { RefreshProfileAuthUseCase } from '../profiles/application/use-cases/RefreshProfileAuthUseCase.js';
 import { RegisterProfileUseCase } from '../profiles/application/use-cases/RegisterProfileUseCase.js';
 import { ShowProfileUseCase } from '../profiles/application/use-cases/ShowProfileUseCase.js';
+import { RunTemplateController } from '../templates/adapters/cli/RunTemplateController.js';
+import { TemplateController } from '../templates/adapters/cli/TemplateController.js';
+import { TemplatePresenter } from '../templates/adapters/cli/TemplatePresenter.js';
+import { JsonFileTemplateRepository } from '../templates/adapters/persistence/JsonFileTemplateRepository.js';
+import { CreateTemplateFromJourneyUseCase } from '../templates/application/use-cases/CreateTemplateFromJourneyUseCase.js';
+import { DeleteTemplateUseCase } from '../templates/application/use-cases/DeleteTemplateUseCase.js';
+import { ListTemplatesUseCase } from '../templates/application/use-cases/ListTemplatesUseCase.js';
+import { RunTemplateUseCase } from '../templates/application/use-cases/RunTemplateUseCase.js';
+import { ShowTemplateUseCase } from '../templates/application/use-cases/ShowTemplateUseCase.js';
 
 export interface ContainerOptions {
   /** Overrides `resolveDataRoot()` - this is the `--home` / `QAMACHINE_HOME` seam. */
@@ -43,6 +52,8 @@ export interface Container {
   runJourneyController: RunJourneyController;
   profileController: ProfileController;
   refreshProfileController: RefreshProfileController;
+  templateController: TemplateController;
+  runTemplateController: RunTemplateController;
 }
 
 export function buildContainer(options: ContainerOptions = {}): Container {
@@ -50,6 +61,7 @@ export function buildContainer(options: ContainerOptions = {}): Container {
   const journeysDirPath = path.join(dataRoot, 'journeys');
   const tracesDirPath = path.join(dataRoot, 'traces');
   const profilesDirPath = path.join(dataRoot, 'profiles');
+  const templatesDirPath = path.join(dataRoot, 'templates');
 
   const clock = new SystemClock();
   const idGenerator = new CryptoIdGenerator();
@@ -81,9 +93,29 @@ export function buildContainer(options: ContainerOptions = {}): Container {
   const showProfileUseCase = new ShowProfileUseCase(profileRepository);
   const refreshProfileAuthUseCase = new RefreshProfileAuthUseCase(profileRepository, authStateProvider, clock);
 
+  const templateRepository = new JsonFileTemplateRepository(templatesDirPath);
+  const createTemplateFromJourneyUseCase = new CreateTemplateFromJourneyUseCase(
+    journeyRepository,
+    templateRepository,
+    idGenerator,
+    clock,
+  );
+  const listTemplatesUseCase = new ListTemplatesUseCase(templateRepository);
+  const showTemplateUseCase = new ShowTemplateUseCase(templateRepository);
+  const deleteTemplateUseCase = new DeleteTemplateUseCase(templateRepository);
+  const runTemplateUseCase = new RunTemplateUseCase(
+    templateRepository,
+    journeyRunner,
+    idGenerator,
+    clock,
+    profileRepository,
+    authStateProvider,
+  );
+
   const journeyPresenter = new JourneyPresenter();
   const journeyRunPresenter = new JourneyRunPresenter();
   const profilePresenter = new ProfilePresenter();
+  const templatePresenter = new TemplatePresenter();
 
   return {
     recordJourneyController: new RecordJourneyController(recordJourneyUseCase, journeyPresenter),
@@ -101,5 +133,13 @@ export function buildContainer(options: ContainerOptions = {}): Container {
       profilePresenter,
     ),
     refreshProfileController: new RefreshProfileController(refreshProfileAuthUseCase, profilePresenter),
+    templateController: new TemplateController(
+      createTemplateFromJourneyUseCase,
+      listTemplatesUseCase,
+      showTemplateUseCase,
+      deleteTemplateUseCase,
+      templatePresenter,
+    ),
+    runTemplateController: new RunTemplateController(runTemplateUseCase, journeyRunPresenter, tracesDirPath),
   };
 }

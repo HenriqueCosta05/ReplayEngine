@@ -232,5 +232,85 @@ export function buildProgram(): Command {
       );
     });
 
+  const template = program.command('template').description('Manage reusable, parameterizable journey templates');
+
+  template
+    .command('create')
+    .description('Save a recorded journey as a reusable template')
+    .requiredOption('--journey-id <id>', 'Id of the journey to snapshot')
+    .requiredOption('--name <name>', 'Name for the template')
+    .option(
+      '--param <stepIndex.field=paramName[:required][:default=value]>',
+      'Declare a parameter, repeatable. stepIndex is 0-based, matching the step order shown by `journey show`.',
+      (value: string, previous: string[]) => previous.concat([value]),
+      [] as string[],
+    )
+    .action(async (options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.templateController.create({
+          journeyId: options.journeyId,
+          name: options.name,
+          params: options.param,
+          json: globalOptions.json,
+          quiet: globalOptions.quiet,
+        }),
+      );
+    });
+
+  template
+    .command('list')
+    .description('List saved templates')
+    .action(async (options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.templateController.list({ json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
+  template
+    .command('show')
+    .description('Show one template by id')
+    .argument('<id>', 'Template id')
+    .action(async (id: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.templateController.show(id, { json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
+  template
+    .command('delete')
+    .description('Delete one template by id')
+    .argument('<id>', 'Template id')
+    .action(async (id: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.templateController.delete(id, { json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
+  template
+    .command('run')
+    .description('Instantiate one template by id against a real browser and run it')
+    .argument('<id>', 'Template id')
+    .option(
+      '--param <name=value>',
+      'Supply a value for a declared template parameter, repeatable',
+      (value: string, previous: string[]) => previous.concat([value]),
+      [] as string[],
+    )
+    .option('--profile <profileId>', 'Id of a registered profile to run with (applies its auth state)')
+    .option('--keep-trace', 'Save a Playwright trace file for this run', false)
+    .option('--browser <browser>', 'Browser engine to run with', parseBrowser, 'chromium')
+    .action(async (id: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.runTemplateController.execute(id, {
+          params: options.param,
+          profile: options.profile,
+          browser: options.browser,
+          keepTrace: options.keepTrace === true,
+          json: globalOptions.json,
+          quiet: globalOptions.quiet,
+        }),
+      );
+    });
+
   return program;
 }
