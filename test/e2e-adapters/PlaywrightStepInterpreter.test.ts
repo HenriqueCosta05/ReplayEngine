@@ -190,6 +190,52 @@ describe('PlaywrightStepInterpreter (chromium-only behaviours)', () => {
     }
   });
 
+  it('does not write captureStorageStatePath when a step fails', async () => {
+    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qamachine-storage-state-'));
+    const capturePath = path.join(stateDir, 'state.json');
+
+    try {
+      const journey = journeyOf(
+        { kind: 'goto', url: `${server.origin}/form.html` },
+        { kind: 'assertText', locator: { strategy: 'testId', value: 'status' }, expected: 'This will never match' },
+      );
+      const result = await interpreter().run(journey, {
+        browser: 'chromium',
+        keepTrace: false,
+        captureStorageStatePath: capturePath,
+      });
+
+      expect(result.status).toBe('failed');
+      await expect(fs.access(capturePath)).rejects.toThrow();
+    } finally {
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves a pre-existing captureStorageStatePath file untouched when a step fails', async () => {
+    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qamachine-storage-state-'));
+    const capturePath = path.join(stateDir, 'state.json');
+    const preExistingContent = JSON.stringify({ cookies: [{ name: 'session', value: 'still-good' }], origins: [] });
+    await fs.writeFile(capturePath, preExistingContent, 'utf8');
+
+    try {
+      const journey = journeyOf(
+        { kind: 'goto', url: `${server.origin}/form.html` },
+        { kind: 'assertText', locator: { strategy: 'testId', value: 'status' }, expected: 'This will never match' },
+      );
+      const result = await interpreter().run(journey, {
+        browser: 'chromium',
+        keepTrace: false,
+        captureStorageStatePath: capturePath,
+      });
+
+      expect(result.status).toBe('failed');
+      expect(await fs.readFile(capturePath, 'utf8')).toBe(preExistingContent);
+    } finally {
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it('reports a launch-time failure as a top-level run error, not as a passed run', async () => {
     const journey = journeyOf({ kind: 'goto', url: `${server.origin}/landing.html` });
 

@@ -145,13 +145,24 @@ export class PlaywrightStepInterpreter implements JourneyRunnerPort {
         stepResults.push(await this.executeStep(page, step));
       }
 
-      if (opts.captureStorageStatePath !== undefined) {
+      const hasFailedStep = stepResults.some((stepResult) => stepResult.status === 'failed');
+      if (opts.captureStorageStatePath !== undefined && !hasFailedStep) {
         // Writes the file as a side effect of the `path` option - the
         // returned value is discarded because callers that need the capture
         // (profile auth refresh) read it back from disk via
         // `AuthStateProviderPort.resolve`, same as a hand-supplied
         // `storageState` file. Captured before tracing stops so a kept trace
         // still reflects the full session either way.
+        //
+        // Guarded on `!hasFailedStep`: `executeStep` swallows its own errors
+        // into a `failed` `StepResult` rather than throwing, so this line is
+        // always reached even when a step failed - without this guard, a
+        // failed login run would silently overwrite the profile's last-good
+        // `storageState.json` with a stale/empty snapshot from the broken
+        // session, while the run correctly reports failure. Every
+        // `JourneyRunnerPort` consumer (not just `StorageStateAuthStateProvider`)
+        // gets this guarantee for free, since it lives at the port
+        // implementation rather than in one caller.
         await context.storageState({ path: opts.captureStorageStatePath });
       }
 
