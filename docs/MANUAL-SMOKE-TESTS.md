@@ -138,11 +138,51 @@ before a release.
 
 ---
 
-## 3. `--load-storage` actually restores a logged-in session
+## 4. A `loginJourney` profile actually authenticates a run
 
-**Why it is manual.** Requires real credentials on a real site.
+**Why it is manual.** Requires real credentials on a real login page: a
+human must record a journey that logs in, register a profile against it,
+and visually confirm the replayed session is authenticated (no login
+screen). This environment (a headless Windows agent sandbox with no
+attached display and no test account on a real site) **cannot drive a real
+login page**, so this item was **not run** here and needs a human before
+release. What *was* verified in this environment, with fakes/a local static
+fixture standing in for a real login page (see
+`src/profiles/adapters/auth/StorageStateAuthStateProvider.test.ts` and the
+`captureStorageStatePath` case in
+`test/e2e-adapters/PlaywrightStepInterpreter.test.ts`): the plumbing that
+`profile refresh` depends on — running a journey with
+`captureStorageStatePath` set does write a real, well-formed
+`storageState.json` (`cookies`/`origins` arrays) to disk, and
+`RefreshProfileAuthUseCase` only advances `authLastRefreshedAt` when that
+run actually passes.
 
-**Steps.** Save a profile's `storageState.json`, then record a new journey
-against the same site with that profile selected.
+**Steps**
 
-**Pass criteria.** The Inspector opens already authenticated — no login screen.
+1. `npm run build`
+2. Record a journey against a real login page that ends up authenticated
+   (fill credentials, submit, land on a page only visible when logged in):
+   ```
+   node dist/bin/qamachine.js record https://<some-login-page> --name login
+   ```
+3. Register a profile whose strategy is that journey:
+   ```
+   node dist/bin/qamachine.js profile add --name admin --auth-type loginJourney \
+     --login-journey-id <journey-id-from-step-2> \
+     --login-storage-state-path ./admin-state.json
+   ```
+4. Refresh it (this actually runs the login journey and captures the state):
+   ```
+   node dist/bin/qamachine.js profile refresh <profile-id-from-step-3>
+   ```
+5. Record or run a **different** journey against the same site with
+   `--profile <profile-id>`:
+   ```
+   node dist/bin/qamachine.js record https://<same-site>/account --name check-auth --profile <profile-id>
+   node dist/bin/qamachine.js journey run <check-auth-journey-id> --profile <profile-id>
+   ```
+
+**Pass criteria.** Step 4 exits `0` and `./admin-state.json` contains a
+non-empty `cookies` or `origins` array. Step 5's Inspector/replay lands on
+the authenticated page directly — no login screen, no redirect to a login
+route.

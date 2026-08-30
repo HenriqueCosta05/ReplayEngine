@@ -46,9 +46,25 @@ describe('RunJourneyController', () => {
     await controller.execute('journey-1', { browser: 'webkit', keepTrace: false, profile: 'some-profile' });
 
     expect(useCase.calls).toHaveLength(1);
-    expect(useCase.calls[0]).toMatchObject({ journeyId: 'journey-1', browser: 'webkit', keepTrace: false });
+    expect(useCase.calls[0]).toMatchObject({
+      journeyId: 'journey-1',
+      browser: 'webkit',
+      keepTrace: false,
+      profileId: 'some-profile',
+    });
     expect(useCase.calls[0]?.tracePath).toBeUndefined();
-    expect(useCase.calls[0]).not.toHaveProperty('profile');
+
+    logSpy.mockRestore();
+  });
+
+  it('leaves profileId undefined when --profile is not given', async () => {
+    const useCase = new FakeRunJourneyUseCase(buildResult('passed'));
+    const controller = new RunJourneyController(useCase, new JourneyRunPresenter(), TRACES_DIR);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await controller.execute('journey-1', { browser: 'chromium', keepTrace: false });
+
+    expect(useCase.calls[0]?.profileId).toBeUndefined();
 
     logSpy.mockRestore();
   });

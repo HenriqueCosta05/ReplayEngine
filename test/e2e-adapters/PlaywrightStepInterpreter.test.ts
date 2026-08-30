@@ -168,6 +168,28 @@ describe('PlaywrightStepInterpreter (chromium-only behaviours)', () => {
     }
   });
 
+  it('captures storageState to captureStorageStatePath when requested', async () => {
+    const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'qamachine-storage-state-'));
+    const capturePath = path.join(stateDir, 'state.json');
+
+    try {
+      const journey = journeyOf({ kind: 'goto', url: `${server.origin}/landing.html` });
+      const result = await interpreter().run(journey, {
+        browser: 'chromium',
+        keepTrace: false,
+        captureStorageStatePath: capturePath,
+      });
+
+      expect(result.status).toBe('passed');
+      const raw = await fs.readFile(capturePath, 'utf8');
+      const parsed = JSON.parse(raw) as { cookies: unknown[]; origins: unknown[] };
+      expect(Array.isArray(parsed.cookies)).toBe(true);
+      expect(Array.isArray(parsed.origins)).toBe(true);
+    } finally {
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it('reports a launch-time failure as a top-level run error, not as a passed run', async () => {
     const journey = journeyOf({ kind: 'goto', url: `${server.origin}/landing.html` });
 

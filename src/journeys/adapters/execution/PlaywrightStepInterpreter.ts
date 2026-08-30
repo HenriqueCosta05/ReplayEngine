@@ -145,6 +145,16 @@ export class PlaywrightStepInterpreter implements JourneyRunnerPort {
         stepResults.push(await this.executeStep(page, step));
       }
 
+      if (opts.captureStorageStatePath !== undefined) {
+        // Writes the file as a side effect of the `path` option - the
+        // returned value is discarded because callers that need the capture
+        // (profile auth refresh) read it back from disk via
+        // `AuthStateProviderPort.resolve`, same as a hand-supplied
+        // `storageState` file. Captured before tracing stops so a kept trace
+        // still reflects the full session either way.
+        await context.storageState({ path: opts.captureStorageStatePath });
+      }
+
       if (opts.keepTrace) {
         await context.tracing.stop(opts.tracePath !== undefined ? { path: opts.tracePath } : {});
         tracePath = opts.tracePath;

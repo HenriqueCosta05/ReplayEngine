@@ -22,7 +22,7 @@ export interface RecordJourneyUseCaseLike {
 export interface RecordCommandOptions {
   name: string;
   browser: RecordJourneyInput['browser'];
-  /** Accepted but not yet wired to storage-state resolution - profiles land in Task 5. */
+  /** Profile id, forwarded to the use case as `profileId` and resolved into a storage state there. */
   profile?: string;
   viewport?: RecordJourneyInput['viewport'];
   device?: string;
@@ -51,6 +51,7 @@ export class RecordJourneyController {
       startUrl: url,
       name: options.name,
       browser: options.browser,
+      profileId: options.profile,
       viewport: options.viewport,
       device: options.device,
       colorScheme: options.colorScheme,

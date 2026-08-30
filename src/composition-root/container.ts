@@ -16,6 +16,15 @@ import { ListJourneysUseCase } from '../journeys/application/use-cases/ListJourn
 import { RecordJourneyUseCase } from '../journeys/application/use-cases/RecordJourneyUseCase.js';
 import { RunJourneyUseCase } from '../journeys/application/use-cases/RunJourneyUseCase.js';
 import { ShowJourneyUseCase } from '../journeys/application/use-cases/ShowJourneyUseCase.js';
+import { StorageStateAuthStateProvider } from '../profiles/adapters/auth/StorageStateAuthStateProvider.js';
+import { ProfileController } from '../profiles/adapters/cli/ProfileController.js';
+import { ProfilePresenter } from '../profiles/adapters/cli/ProfilePresenter.js';
+import { RefreshProfileController } from '../profiles/adapters/cli/RefreshProfileController.js';
+import { JsonFileProfileRepository } from '../profiles/adapters/persistence/JsonFileProfileRepository.js';
+import { ListProfilesUseCase } from '../profiles/application/use-cases/ListProfilesUseCase.js';
+import { RefreshProfileAuthUseCase } from '../profiles/application/use-cases/RefreshProfileAuthUseCase.js';
+import { RegisterProfileUseCase } from '../profiles/application/use-cases/RegisterProfileUseCase.js';
+import { ShowProfileUseCase } from '../profiles/application/use-cases/ShowProfileUseCase.js';
 
 export interface ContainerOptions {
   /** Overrides `resolveDataRoot()` - this is the `--home` / `QAMACHINE_HOME` seam. */
@@ -32,12 +41,15 @@ export interface Container {
   recordJourneyController: RecordJourneyController;
   journeyController: JourneyController;
   runJourneyController: RunJourneyController;
+  profileController: ProfileController;
+  refreshProfileController: RefreshProfileController;
 }
 
 export function buildContainer(options: ContainerOptions = {}): Container {
   const dataRoot = options.home ?? resolveDataRoot();
   const journeysDirPath = path.join(dataRoot, 'journeys');
   const tracesDirPath = path.join(dataRoot, 'traces');
+  const profilesDirPath = path.join(dataRoot, 'profiles');
 
   const clock = new SystemClock();
   const idGenerator = new CryptoIdGenerator();
@@ -46,14 +58,32 @@ export function buildContainer(options: ContainerOptions = {}): Container {
   const journeyRecorder = new PlaywrightCodegenJourneyRecorder();
   const journeyRunner = new PlaywrightStepInterpreter(idGenerator, clock);
 
-  const recordJourneyUseCase = new RecordJourneyUseCase(journeyRecorder, journeyRepository, idGenerator, clock);
-  const runJourneyUseCase = new RunJourneyUseCase(journeyRepository, journeyRunner);
+  const profileRepository = new JsonFileProfileRepository(profilesDirPath);
+  // The one place `profiles` depends on `journeys`' application ports - see
+  // `StorageStateAuthStateProvider`'s doc comment for why that is legitimate.
+  const authStateProvider = new StorageStateAuthStateProvider(journeyRepository, journeyRunner);
+
+  const recordJourneyUseCase = new RecordJourneyUseCase(
+    journeyRecorder,
+    journeyRepository,
+    idGenerator,
+    clock,
+    profileRepository,
+    authStateProvider,
+  );
+  const runJourneyUseCase = new RunJourneyUseCase(journeyRepository, journeyRunner, profileRepository, authStateProvider);
   const listJourneysUseCase = new ListJourneysUseCase(journeyRepository);
   const showJourneyUseCase = new ShowJourneyUseCase(journeyRepository);
   const deleteJourneyUseCase = new DeleteJourneyUseCase(journeyRepository);
 
+  const registerProfileUseCase = new RegisterProfileUseCase(profileRepository, idGenerator, clock);
+  const listProfilesUseCase = new ListProfilesUseCase(profileRepository);
+  const showProfileUseCase = new ShowProfileUseCase(profileRepository);
+  const refreshProfileAuthUseCase = new RefreshProfileAuthUseCase(profileRepository, authStateProvider, clock);
+
   const journeyPresenter = new JourneyPresenter();
   const journeyRunPresenter = new JourneyRunPresenter();
+  const profilePresenter = new ProfilePresenter();
 
   return {
     recordJourneyController: new RecordJourneyController(recordJourneyUseCase, journeyPresenter),
@@ -64,5 +94,12 @@ export function buildContainer(options: ContainerOptions = {}): Container {
       journeyPresenter,
     ),
     runJourneyController: new RunJourneyController(runJourneyUseCase, journeyRunPresenter, tracesDirPath),
+    profileController: new ProfileController(
+      registerProfileUseCase,
+      listProfilesUseCase,
+      showProfileUseCase,
+      profilePresenter,
+    ),
+    refreshProfileController: new RefreshProfileController(refreshProfileAuthUseCase, profilePresenter),
   };
 }

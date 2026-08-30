@@ -2,10 +2,12 @@ import { Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import type { Geolocation, SupportedBrowser, Viewport } from '../journeys/application/ports/JourneyRecorderPort.js';
+import type { CreateAuthStrategyInput } from '../profiles/domain/AuthStrategy.js';
 import { buildContainer, type Container } from './container.js';
 
 const SUPPORTED_BROWSERS: readonly SupportedBrowser[] = ['chromium', 'firefox', 'webkit'];
 const COLOR_SCHEMES = ['light', 'dark', 'no-preference'] as const;
+const AUTH_TYPES: readonly CreateAuthStrategyInput['type'][] = ['none', 'storageState', 'loginJourney'];
 
 interface GlobalOptions {
   home?: string;
@@ -34,6 +36,13 @@ function parseViewport(value: string): Viewport {
     throw new InvalidArgumentError('Viewport must be in the form <width>x<height>, e.g. 1280x720.');
   }
   return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+function parseAuthType(value: string): CreateAuthStrategyInput['type'] {
+  if (!(AUTH_TYPES as readonly string[]).includes(value)) {
+    throw new InvalidArgumentError(`Auth type must be one of: ${AUTH_TYPES.join(', ')}.`);
+  }
+  return value as CreateAuthStrategyInput['type'];
 }
 
 function parseGeolocation(value: string): Geolocation {
@@ -91,7 +100,7 @@ export function buildProgram(): Command {
     .description('Record a new journey by driving `playwright codegen`')
     .argument('<url>', 'URL to start recording from')
     .requiredOption('--name <name>', 'Name for the recorded journey')
-    .option('--profile <profile>', 'Profile to record with (not yet wired - lands in a later task)')
+    .option('--profile <profileId>', 'Id of a registered profile to record with (applies its auth state)')
     .option('--browser <browser>', 'Browser engine to record with', parseBrowser, 'chromium')
     .option('--viewport <WxH>', 'Viewport size, e.g. 1280x720', parseViewport)
     .option('--device <device>', 'Emulate a known Playwright device, e.g. "iPhone 13"')
@@ -152,7 +161,7 @@ export function buildProgram(): Command {
     .command('run')
     .description('Replay one journey by id against a real browser')
     .argument('<id>', 'Journey id')
-    .option('--profile <profile>', 'Profile to run with (not yet wired - lands in a later task)')
+    .option('--profile <profileId>', 'Id of a registered profile to run with (applies its auth state)')
     .option('--keep-trace', 'Save a Playwright trace file for this run', false)
     .option('--browser <browser>', 'Browser engine to run with', parseBrowser, 'chromium')
     .action(async (id: string, options, command: Command) => {
@@ -164,6 +173,62 @@ export function buildProgram(): Command {
           json: globalOptions.json,
           quiet: globalOptions.quiet,
         }),
+      );
+    });
+
+  const profile = program.command('profile').description('Manage locally-registered user profiles');
+
+  profile
+    .command('add')
+    .description('Register a new profile')
+    .requiredOption('--name <name>', 'Name for the profile (must be unique)')
+    .requiredOption('--auth-type <type>', `Auth strategy (${AUTH_TYPES.join('|')})`, parseAuthType)
+    .option('--storage-state-path <path>', 'Path to an existing storageState.json (auth-type=storageState)')
+    .option('--login-journey-id <id>', 'Journey id that logs in (auth-type=loginJourney)')
+    .option(
+      '--login-storage-state-path <path>',
+      'Path where the captured storage state will be written and read from (auth-type=loginJourney)',
+    )
+    .action(async (options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.profileController.add({
+          name: options.name,
+          authType: options.authType,
+          storageStatePath: options.storageStatePath,
+          loginJourneyId: options.loginJourneyId,
+          loginStorageStatePath: options.loginStorageStatePath,
+          json: globalOptions.json,
+          quiet: globalOptions.quiet,
+        }),
+      );
+    });
+
+  profile
+    .command('list')
+    .description('List registered profiles')
+    .action(async (options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.profileController.list({ json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
+  profile
+    .command('show')
+    .description('Show one profile by id')
+    .argument('<id>', 'Profile id')
+    .action(async (id: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.profileController.show(id, { json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
+  profile
+    .command('refresh')
+    .description("Refresh a profile's stored auth state by re-running its login journey")
+    .argument('<id>', 'Profile id')
+    .action(async (id: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.refreshProfileController.execute(id, { json: globalOptions.json, quiet: globalOptions.quiet }),
       );
     });
 

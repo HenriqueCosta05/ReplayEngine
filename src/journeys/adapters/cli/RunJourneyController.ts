@@ -13,7 +13,7 @@ export interface RunJourneyUseCaseLike {
 export interface RunCommandOptions {
   browser: RunJourneyInput['browser'];
   keepTrace: boolean;
-  /** Accepted but not yet wired to storage-state resolution - profiles land in Task 5. */
+  /** Profile id, forwarded to the use case as `profileId` and resolved into a storage state there. */
   profile?: string;
   json?: boolean;
   quiet?: boolean;
@@ -45,6 +45,7 @@ export class RunJourneyController {
     const result = await this.useCase.execute({
       journeyId,
       browser: options.browser,
+      profileId: options.profile,
       keepTrace: options.keepTrace,
       tracePath:
         options.keepTrace ? path.join(this.tracesDirPath, `${journeyId}-${randomUUID()}.zip`) : undefined,

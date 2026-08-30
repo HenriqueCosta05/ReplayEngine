@@ -52,6 +52,7 @@ describe('RecordJourneyController', () => {
       startUrl: 'https://example.com',
       name: 'Smoke test',
       browser: 'firefox',
+      profileId: 'some-profile',
       viewport: { width: 1280, height: 720 },
       device: 'iPhone 13',
       colorScheme: 'dark',
@@ -61,7 +62,7 @@ describe('RecordJourneyController', () => {
     });
   });
 
-  it('does not forward --profile onto the use case input (not wired until a later task)', async () => {
+  it('forwards --profile onto the use case input as profileId', async () => {
     const useCase = new FakeRecordJourneyUseCase(buildJourney());
     const controller = new RecordJourneyController(useCase, new JourneyPresenter());
 
@@ -72,8 +73,16 @@ describe('RecordJourneyController', () => {
       quiet: true,
     });
 
-    expect(useCase.calls[0]).not.toHaveProperty('profile');
-    expect(useCase.calls[0]).not.toHaveProperty('storageStatePath');
+    expect(useCase.calls[0]?.profileId).toBe('some-profile');
+  });
+
+  it('leaves profileId undefined when --profile is not given', async () => {
+    const useCase = new FakeRecordJourneyUseCase(buildJourney());
+    const controller = new RecordJourneyController(useCase, new JourneyPresenter());
+
+    await controller.execute('https://example.com', { name: 'Smoke test', browser: 'chromium', quiet: true });
+
+    expect(useCase.calls[0]?.profileId).toBeUndefined();
   });
 
   it('invokes the presenter with the recorded journey, human mode by default', async () => {
