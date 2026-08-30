@@ -36,10 +36,23 @@ confirms that assumption still holds against the real generator.
 **Pass criteria**
 
 - The command returns a draft containing one step per interaction, in order.
-- No `ParseError`. A `ParseError` naming a source snippet means real codegen
-  emitted a construct our subset does not cover — copy that snippet into a new
-  fixture under `test/fixtures/codegen-output/` and extend
-  `CodegenActionMapper` to handle it. Do **not** make the parser skip it.
+- No `ParseError`. Every `ParseError` names the offending source line; which
+  fix applies depends on *why* that line was rejected:
+  - **An unsupported construct** (`dblclick()`, a popup/`waitForEvent` block, a
+    regex locator, `not.toBeVisible()`). Real codegen emitted something outside
+    our subset. Copy the snippet into a new fixture under
+    `test/fixtures/codegen-output/` and extend `CodegenActionMapper` to handle
+    it. Do **not** make the parser skip it.
+  - **A domain rule rejecting the values** — the message will be a domain one
+    (`Action of kind "fill" requires a non-empty "value" field: <line>`) and
+    the error's `cause` will be a `DomainError`. The mapper is behaving
+    correctly here; the question is whether the *domain rule* is right. The
+    known instance is `fill('')`, which codegen emits when you clear a text
+    field: it is currently rejected by Task 1's non-empty-`value` rule and
+    covered by `test/fixtures/codegen-output/cleared-field-flow.spec.ts`. If
+    this blocks a real recording, that is a domain-rule conversation (should
+    `fill` accept an empty value, or should the recorder model "clear field" as
+    its own action kind?) — not something to patch around in the adapter.
 - The temp script (`%TEMP%/qamachine-codegen-*.spec.ts` /
   `$TMPDIR/qamachine-codegen-*.spec.ts`) is gone afterwards.
 

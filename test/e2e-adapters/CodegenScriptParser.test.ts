@@ -109,6 +109,7 @@ describe('parseCodegenScript golden files', () => {
       'checkbox-select-flow.spec.ts',
       'assert-text-value-flow.spec.ts',
       'css-fallback-flow.spec.ts',
+      'cleared-field-flow.spec.ts',
     ];
 
     for (const fixture of fixtures) {
@@ -141,6 +142,16 @@ describe('parseCodegenScript argument handling', () => {
     const regex = ir?.kind === 'page' ? ir.chain[0]?.args[0] : undefined;
     expect(regex).toBeInstanceOf(RecordedRegex);
     expect(String(regex)).toBe('/wel.ome/i');
+  });
+
+  it('accepts an empty-string argument: rejecting `fill("")` is the domain’s call, not the parser’s', () => {
+    const ir = parseCodegenScript(readCodegenFixture('cleared-field-flow.spec.ts'));
+
+    expect(ir[2]).toMatchObject({
+      kind: 'page',
+      chain: [{ name: 'getByLabel', args: ['Display name'] }, { name: 'fill', args: [''] }],
+      source: "await page.getByLabel('Display name').fill('');",
+    });
   });
 
   it('records negation so the mapper can reject it with context', () => {

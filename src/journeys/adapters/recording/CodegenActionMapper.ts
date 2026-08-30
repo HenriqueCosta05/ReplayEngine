@@ -1,5 +1,6 @@
 import { createAction, type Action } from '../../domain/Action.js';
 import { createLocator, type Locator, type LocatorOptions, type LocatorStrategy } from '../../domain/Locator.js';
+import { DomainError } from '../../domain/errors.js';
 import { ParseError } from './errors.js';
 import { RecordedRegex, type RecordedActionIR, type RecordedCall } from './CodegenScriptParser.js';
 
@@ -39,6 +40,30 @@ function describe(value: unknown): string {
 
 function fail(source: string, reason: string): never {
   throw new ParseError(`${reason}: \`${source}\``);
+}
+
+/**
+ * Runs a domain factory and, if it rejects the input, re-throws its
+ * `DomainError` as a `ParseError` naming the recorded line that produced it.
+ *
+ * The domain stays the authority on validity - this does not soften a single
+ * rule, it only attaches provenance. Without it a real recording (codegen
+ * emits `fill('')` whenever the person clears a text field) aborts the whole
+ * session with `Action of kind "fill" requires a non-empty "value" field.` and
+ * no indication of which of forty recorded lines caused it. The original error
+ * is kept as `cause` so nothing is lost.
+ */
+function fromDomain<T>(source: string, build: () => T): T {
+  try {
+    return build();
+  } catch (error) {
+    if (error instanceof DomainError) {
+      // Trailing period stripped so the message reads as one sentence once
+      // the `: \`source\`` suffix is appended, matching every other ParseError.
+      throw new ParseError(`${error.message.replace(/\.$/, '')}: \`${source}\``, { cause: error });
+    }
+    throw error;
+  }
 }
 
 function requireString(value: unknown, source: string, what: string): string {
@@ -267,13 +292,23 @@ function mapExpectAction(ir: Extract<RecordedActionIR, { kind: 'expect' }>): Act
  * `createAction`/`createLocator` rather than object-literal casts, so the
  * domain - not this adapter - remains the authority on what a valid action is.
  *
+ * Every mapping runs inside `fromDomain`, so a rejection by a domain factory
+ * surfaces as a `ParseError` naming the recorded line, exactly like a
+ * rejection by this module's own shape checks. One statement, one error, one
+ * source snippet - whichever layer did the rejecting. `fromDomain` wraps the
+ * whole per-entry mapping rather than each of the twelve factory call sites
+ * individually, which keeps the guard in one place and makes it impossible to
+ * add a thirteenth call site that forgets it.
+ *
  * Each mapped action carries the original source line as its `label`, which
  * makes `journey show` self-explanatory and keeps a recorded step traceable
  * back to the exact codegen line it came from.
  */
 export function mapToActions(ir: readonly RecordedActionIR[]): MappedAction[] {
   return ir.map((entry) => ({
-    action: entry.kind === 'page' ? mapPageAction(entry) : mapExpectAction(entry),
+    action: fromDomain(entry.source, () =>
+      entry.kind === 'page' ? mapPageAction(entry) : mapExpectAction(entry),
+    ),
     label: entry.source,
   }));
 }

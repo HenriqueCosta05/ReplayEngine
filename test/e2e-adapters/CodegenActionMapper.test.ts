@@ -4,6 +4,7 @@ import { mapToActions } from '../../src/journeys/adapters/recording/CodegenActio
 import { parseCodegenScript } from '../../src/journeys/adapters/recording/CodegenScriptParser.js';
 import { ParseError } from '../../src/journeys/adapters/recording/errors.js';
 import type { Action } from '../../src/journeys/domain/Action.js';
+import { DomainError } from '../../src/journeys/domain/errors.js';
 import { readCodegenFixture } from './helpers/fixtures.js';
 
 function actionsFromFixture(fileName: string): Action[] {
@@ -213,5 +214,67 @@ describe('mapToActions failure modes', () => {
     expect(() => actionsFromStatements("await page.getByRole('button').dblclick();")).toThrow(
       /`await page\.getByRole\('button'\)\.dblclick\(\);`/,
     );
+  });
+});
+
+/**
+ * A recognised shape carrying domain-invalid values must fail the same way an
+ * unrecognised shape does: as a `ParseError` naming the line. Otherwise a raw
+ * `DomainError` escapes to the recorder and aborts a whole recording session
+ * with a message that does not say which of the recorded statements caused it.
+ */
+describe('mapToActions surfaces domain rejections against the source line', () => {
+  const clearedFieldLine = "await page.getByLabel('Display name').fill('');";
+
+  it('converts the DomainError from a recorded `fill("")` into a located ParseError', () => {
+    expect(() => actionsFromFixture('cleared-field-flow.spec.ts')).toThrow(ParseError);
+    expect(() => actionsFromFixture('cleared-field-flow.spec.ts')).toThrow(
+      /requires a non-empty "value" field/,
+    );
+    expect(() => actionsFromFixture('cleared-field-flow.spec.ts')).toThrow(
+      new RegExp(clearedFieldLine.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    );
+  });
+
+  it('keeps the original DomainError as `cause`, losing no information', () => {
+    let thrown: unknown;
+    try {
+      actionsFromFixture('cleared-field-flow.spec.ts');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(ParseError);
+    expect((thrown as ParseError).cause).toBeInstanceOf(DomainError);
+    expect(((thrown as ParseError).cause as DomainError).message).toBe(
+      'Action of kind "fill" requires a non-empty "value" field.',
+    );
+  });
+
+  it('locates a domain rejection raised while building the locator, not the action', () => {
+    expect(() => actionsFromStatements("await page.locator('').click();")).toThrow(ParseError);
+    expect(() => actionsFromStatements("await page.locator('').click();")).toThrow(
+      /Locator value must be a non-empty string: `await page\.locator\(''\)\.click\(\);`/,
+    );
+  });
+
+  it('locates a domain rejection raised from an assertion', () => {
+    expect(() => actionsFromStatements("await expect(page.getByTestId('x')).toHaveText('');")).toThrow(
+      /requires a non-empty "expected" field: `await expect\(page\.getByTestId\('x'\)\)\.toHaveText\(''\);`/,
+    );
+  });
+
+  it('leaves this adapter’s own ParseErrors untouched by the domain guard', () => {
+    // A ParseError passing back out through `fromDomain` must not be rewrapped
+    // or have a snippet appended twice.
+    let thrown: unknown;
+    try {
+      actionsFromStatements("await page.getByRole('button').dblclick();");
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect((thrown as ParseError).cause).toBeUndefined();
+    expect((thrown as ParseError).message.match(/`await page/g)).toHaveLength(1);
   });
 });
