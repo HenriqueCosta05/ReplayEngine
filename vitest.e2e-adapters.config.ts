@@ -8,5 +8,10 @@ export default defineConfig({
   test: {
     include: ['test/e2e-adapters/**/*.test.ts'],
     exclude: ['node_modules', 'dist'],
+    // Launching three browser engines and letting a deliberately-failing
+    // assertion exhaust Playwright's own 5s retry window comfortably exceeds
+    // vitest's 5s default.
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
   },
 });

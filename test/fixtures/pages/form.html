@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>QAMachine form fixture</title>
+  </head>
+  <body>
+    <h1>Sign up</h1>
+
+    <!--
+      Deliberately not wrapped in a <form>: pressing Enter inside a real form
+      submits it and navigates, which would race every assertion that follows.
+    -->
+    <div id="signup">
+      <label for="email">Email</label>
+      <input id="email" type="text" placeholder="you@example.com" />
+
+      <label for="newsletter">Newsletter</label>
+      <input id="newsletter" type="checkbox" />
+
+      <label for="country">Country</label>
+      <select id="country">
+        <option value="br">Brazil</option>
+        <option value="pt">Portugal</option>
+      </select>
+
+      <img
+        src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        alt="Company logo"
+        width="16"
+        height="16"
+      />
+      <a href="#help" title="Get help">Help</a>
+
+      <button type="button" id="submit">Create account</button>
+    </div>
+
+    <p id="status" data-testid="status">Not submitted</p>
+    <p id="hover-target">Hover me</p>
+    <p id="hover-output">idle</p>
+
+    <script>
+      document.getElementById('submit').addEventListener('click', function () {
+        document.getElementById('status').textContent = 'Account created';
+      });
+      document.getElementById('email').addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          document.getElementById('status').textContent = 'Submitted with Enter';
+        }
+      });
+      document.getElementById('hover-target').addEventListener('mouseenter', function () {
+        document.getElementById('hover-output').textContent = 'hovered';
+      });
+    </script>
+  </body>
+</html>

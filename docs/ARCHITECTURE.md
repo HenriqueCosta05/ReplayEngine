@@ -95,6 +95,26 @@ Both adapters implement application-layer ports (`JourneyRecorderPort`,
 whether a journey came from a live recording, a hand-authored fixture, or
 a template instantiation.
 
+### How the codegen subprocess is launched
+
+The recorder starts codegen as `node <playwright/cli.js> codegen …` with
+`shell: false`, rather than `npx playwright codegen …`. This supersedes the
+earlier "`shell: true` or an explicit `.cmd` shim" note, which was measured
+on this Windows 11 / Node 26 machine and found to be wrong in one half and
+unsafe in the other:
+
+| Attempt | Result |
+| --- | --- |
+| `spawn('npx', args)` | `ENOENT` — there is no extension-less `npx` on Windows |
+| `spawn('npx.cmd', args)` | `EINVAL` thrown synchronously — since the CVE-2024-27980 fix Node refuses to launch `.cmd`/`.bat` without a shell, so explicit shim resolution no longer works at all |
+| `spawn('npx', args, {shell: true})` | works, but emits `DEP0190` — with a shell the arguments are concatenated, not escaped, so a recorded start URL containing `&`, `|` or `"` would be interpreted by `cmd.exe` |
+
+Resolving the CLI entry point through `playwright/package.json`'s `bin` field
+and running it with `process.execPath` avoids all three: it needs no shell on
+any platform, cannot be command-injected through a URL, and pins recording to
+the exact Playwright version in `node_modules` rather than whatever `npx`
+would resolve.
+
 ## Data layout
 
 Every entity is persisted as one JSON file per record under
