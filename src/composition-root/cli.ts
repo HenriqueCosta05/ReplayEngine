@@ -312,5 +312,107 @@ export function buildProgram(): Command {
       );
     });
 
+  const playbook = program.command('playbook').description('Manage playbooks: ordered suites of journeys/templates');
+
+  playbook
+    .command('create')
+    .description('Create a new, empty playbook')
+    .requiredOption('--name <name>', 'Name for the playbook')
+    .action(async (options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.playbookController.create({
+          name: options.name,
+          json: globalOptions.json,
+          quiet: globalOptions.quiet,
+        }),
+      );
+    });
+
+  playbook
+    .command('add-entry')
+    .description('Append a journey or template entry to an existing playbook')
+    .argument('<playbookId>', 'Playbook id')
+    .option('--journey <id>', 'Id of a journey to run as this entry (mutually exclusive with --template)')
+    .option('--template <id>', 'Id of a template to run as this entry (mutually exclusive with --journey)')
+    .option(
+      '--param <name=value>',
+      'Supply a value for a declared template parameter, repeatable (only with --template)',
+      (value: string, previous: string[]) => previous.concat([value]),
+      [] as string[],
+    )
+    .option('--profile <profileId>', 'Id of a registered profile to run this entry with')
+    .option('--continue-on-failure', 'Keep running the rest of the playbook if this entry fails', false)
+    .action(async (playbookId: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.playbookController.addEntry(playbookId, {
+          journey: options.journey,
+          template: options.template,
+          params: options.param,
+          profile: options.profile,
+          continueOnFailure: options.continueOnFailure === true,
+          json: globalOptions.json,
+          quiet: globalOptions.quiet,
+        }),
+      );
+    });
+
+  playbook
+    .command('list')
+    .description('List saved playbooks')
+    .action(async (options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.playbookController.list({ json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
+  playbook
+    .command('show')
+    .description('Show one playbook by id')
+    .argument('<id>', 'Playbook id')
+    .action(async (id: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.playbookController.show(id, { json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
+  playbook
+    .command('run')
+    .description('Run every entry of a playbook, in order, against a real browser')
+    .argument('<id>', 'Playbook id')
+    .option('--stop-on-first-failure', 'Halt the run on the first failing entry, overriding each entry\'s own continue-on-failure', false)
+    .option('--keep-trace', 'Save a Playwright trace file for each entry of this run', false)
+    .option('--browser <browser>', 'Browser engine to run with', parseBrowser, 'chromium')
+    .action(async (id: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.runPlaybookController.execute(id, {
+          browser: options.browser,
+          keepTrace: options.keepTrace === true,
+          stopOnFirstFailure: options.stopOnFirstFailure === true,
+          json: globalOptions.json,
+          quiet: globalOptions.quiet,
+        }),
+      );
+    });
+
+  playbook
+    .command('runs')
+    .description('List every past run of one playbook')
+    .argument('<id>', 'Playbook id')
+    .action(async (id: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.playbookController.runs(id, { json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
+  playbook
+    .command('show-run')
+    .description('Show one playbook run by id')
+    .argument('<runId>', 'Playbook run id')
+    .action(async (runId: string, options, command: Command) => {
+      await runAction(command, (container, globalOptions) =>
+        container.playbookController.showRun(runId, { json: globalOptions.json, quiet: globalOptions.quiet }),
+      );
+    });
+
   return program;
 }

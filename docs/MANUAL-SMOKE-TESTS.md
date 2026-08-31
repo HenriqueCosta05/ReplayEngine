@@ -186,3 +186,67 @@ run actually passes.
 non-empty `cookies` or `origins` array. Step 5's Inspector/replay lands on
 the authenticated page directly — no login screen, no redirect to a login
 route.
+
+---
+
+## 5. A mixed playbook (journey + template entries, one forced to fail)
+
+**Why it is manual.** Same underlying reason as items 1-3: driving entries
+through a real, headless-but-real browser against a real page is what
+proves the `playbook run` orchestration (journey resolution, template
+instantiation, per-entry profile resolution, stop-on-first-failure vs.
+continue-on-failure, trace capture) actually wires together end-to-end —
+`RunPlaybookUseCase`'s own tests cover the orchestration logic against
+fakes, but not that the CLI plumbing (`RunPlaybookController`,
+`PlaybookRunPresenter`, `container.ts`'s wiring) reaches a real browser.
+
+**Steps**
+
+1. `npm run build`
+2. Record two journeys against a real page: one that always passes (e.g.
+   navigate + an assertion that is true), and one that always fails (e.g.
+   navigate + an assertion on text that is never present):
+   ```
+   node dist/bin/qamachine.js record https://example.com --name will-pass
+   node dist/bin/qamachine.js record https://example.com --name will-fail
+   ```
+3. Save the passing journey as a template with at least one parameter:
+   ```
+   node dist/bin/qamachine.js template create --journey-id <will-pass-id> --name pass-template \
+     --param 0.value=greeting:default=hello
+   ```
+4. Create a playbook and add three entries: the failing journey, the
+   passing journey, and the template — in that order, so the failing entry
+   is first and its own `continueOnFailure` decides whether the rest run:
+   ```
+   node dist/bin/qamachine.js playbook create --name mixed-suite
+   node dist/bin/qamachine.js playbook add-entry <playbook-id> --journey <will-fail-id> --continue-on-failure
+   node dist/bin/qamachine.js playbook add-entry <playbook-id> --journey <will-pass-id>
+   node dist/bin/qamachine.js playbook add-entry <playbook-id> --template <pass-template-id> --param greeting=hi
+   ```
+5. Run it without `--stop-on-first-failure`:
+   ```
+   node dist/bin/qamachine.js playbook run <playbook-id>
+   ```
+6. Run it again with `--stop-on-first-failure`:
+   ```
+   node dist/bin/qamachine.js playbook run <playbook-id> --stop-on-first-failure
+   ```
+7. `node dist/bin/qamachine.js playbook runs <playbook-id>` and
+   `node dist/bin/qamachine.js playbook show-run <run-id>` for one of the
+   two runs above.
+
+**Pass criteria.**
+
+- Step 5: prints one `FAIL`/`PASS`/`PASS` line (in entry order) and an
+  overall `FAILED` summary, because the first entry's own
+  `continueOnFailure: true` lets the run proceed past it; exits `1`
+  (`overallStatus` is `'failed'` since not every entry passed).
+- Step 6: prints `FAIL`/`SKIP`/`SKIP` — `--stop-on-first-failure` overrides
+  the first entry's stored `continueOnFailure` and halts the run, so
+  entries 2-3 are recorded `'skipped'` without being run; exits `1`.
+- Step 7: `playbook runs` lists both runs in a table with their
+  `overallStatus`; `playbook show-run` reprints the same per-entry detail
+  as step 5/6's live output for the chosen run id.
+- `--keep-trace` on either run writes one `.zip` file per non-skipped entry
+  under `<home>/traces/`, named `<playbookId>-<entryId>-<uuid>.zip`.

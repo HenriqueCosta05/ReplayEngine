@@ -34,6 +34,19 @@ import { DeleteTemplateUseCase } from '../templates/application/use-cases/Delete
 import { ListTemplatesUseCase } from '../templates/application/use-cases/ListTemplatesUseCase.js';
 import { RunTemplateUseCase } from '../templates/application/use-cases/RunTemplateUseCase.js';
 import { ShowTemplateUseCase } from '../templates/application/use-cases/ShowTemplateUseCase.js';
+import { PlaybookController } from '../playbooks/adapters/cli/PlaybookController.js';
+import { PlaybookPresenter } from '../playbooks/adapters/cli/PlaybookPresenter.js';
+import { PlaybookRunPresenter } from '../playbooks/adapters/cli/PlaybookRunPresenter.js';
+import { RunPlaybookController } from '../playbooks/adapters/cli/RunPlaybookController.js';
+import { JsonFilePlaybookRepository } from '../playbooks/adapters/persistence/JsonFilePlaybookRepository.js';
+import { JsonFilePlaybookRunResultRepository } from '../playbooks/adapters/persistence/JsonFilePlaybookRunResultRepository.js';
+import { AddEntryToPlaybookUseCase } from '../playbooks/application/use-cases/AddEntryToPlaybookUseCase.js';
+import { CreatePlaybookUseCase } from '../playbooks/application/use-cases/CreatePlaybookUseCase.js';
+import { ListPlaybookRunsUseCase } from '../playbooks/application/use-cases/ListPlaybookRunsUseCase.js';
+import { ListPlaybooksUseCase } from '../playbooks/application/use-cases/ListPlaybooksUseCase.js';
+import { RunPlaybookUseCase } from '../playbooks/application/use-cases/RunPlaybookUseCase.js';
+import { ShowPlaybookRunUseCase } from '../playbooks/application/use-cases/ShowPlaybookRunUseCase.js';
+import { ShowPlaybookUseCase } from '../playbooks/application/use-cases/ShowPlaybookUseCase.js';
 
 export interface ContainerOptions {
   /** Overrides `resolveDataRoot()` - this is the `--home` / `QAMACHINE_HOME` seam. */
@@ -54,6 +67,8 @@ export interface Container {
   refreshProfileController: RefreshProfileController;
   templateController: TemplateController;
   runTemplateController: RunTemplateController;
+  playbookController: PlaybookController;
+  runPlaybookController: RunPlaybookController;
 }
 
 export function buildContainer(options: ContainerOptions = {}): Container {
@@ -62,6 +77,8 @@ export function buildContainer(options: ContainerOptions = {}): Container {
   const tracesDirPath = path.join(dataRoot, 'traces');
   const profilesDirPath = path.join(dataRoot, 'profiles');
   const templatesDirPath = path.join(dataRoot, 'templates');
+  const playbooksDirPath = path.join(dataRoot, 'playbooks');
+  const playbookRunsDirPath = path.join(dataRoot, 'playbook-runs');
 
   const clock = new SystemClock();
   const idGenerator = new CryptoIdGenerator();
@@ -112,10 +129,38 @@ export function buildContainer(options: ContainerOptions = {}): Container {
     authStateProvider,
   );
 
+  const playbookRepository = new JsonFilePlaybookRepository(playbooksDirPath);
+  const playbookRunResultRepository = new JsonFilePlaybookRunResultRepository(playbookRunsDirPath);
+  const createPlaybookUseCase = new CreatePlaybookUseCase(playbookRepository, idGenerator, clock);
+  const addEntryToPlaybookUseCase = new AddEntryToPlaybookUseCase(
+    playbookRepository,
+    journeyRepository,
+    templateRepository,
+    profileRepository,
+    idGenerator,
+  );
+  const listPlaybooksUseCase = new ListPlaybooksUseCase(playbookRepository);
+  const showPlaybookUseCase = new ShowPlaybookUseCase(playbookRepository);
+  const listPlaybookRunsUseCase = new ListPlaybookRunsUseCase(playbookRepository, playbookRunResultRepository);
+  const showPlaybookRunUseCase = new ShowPlaybookRunUseCase(playbookRunResultRepository);
+  const runPlaybookUseCase = new RunPlaybookUseCase(
+    playbookRepository,
+    journeyRepository,
+    templateRepository,
+    journeyRunner,
+    profileRepository,
+    authStateProvider,
+    idGenerator,
+    clock,
+    playbookRunResultRepository,
+  );
+
   const journeyPresenter = new JourneyPresenter();
   const journeyRunPresenter = new JourneyRunPresenter();
   const profilePresenter = new ProfilePresenter();
   const templatePresenter = new TemplatePresenter();
+  const playbookPresenter = new PlaybookPresenter();
+  const playbookRunPresenter = new PlaybookRunPresenter();
 
   return {
     recordJourneyController: new RecordJourneyController(recordJourneyUseCase, journeyPresenter),
@@ -141,5 +186,16 @@ export function buildContainer(options: ContainerOptions = {}): Container {
       templatePresenter,
     ),
     runTemplateController: new RunTemplateController(runTemplateUseCase, journeyRunPresenter, tracesDirPath),
+    playbookController: new PlaybookController(
+      createPlaybookUseCase,
+      addEntryToPlaybookUseCase,
+      listPlaybooksUseCase,
+      showPlaybookUseCase,
+      listPlaybookRunsUseCase,
+      showPlaybookRunUseCase,
+      playbookPresenter,
+      playbookRunPresenter,
+    ),
+    runPlaybookController: new RunPlaybookController(runPlaybookUseCase, playbookRunPresenter, tracesDirPath),
   };
 }
