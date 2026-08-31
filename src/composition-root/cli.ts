@@ -241,7 +241,7 @@ export function buildProgram(): Command {
     .requiredOption('--name <name>', 'Name for the template')
     .option(
       '--param <stepIndex.field=paramName[:required][:default=value]>',
-      'Declare a parameter, repeatable. stepIndex is 0-based, matching the step order shown by `journey show`.',
+      'Declare a parameter, repeatable. stepIndex is 0-based (the step\'s Step.order); `journey show` numbers steps starting at 1, so stepIndex = displayed step number - 1.',
       (value: string, previous: string[]) => previous.concat([value]),
       [] as string[],
     )

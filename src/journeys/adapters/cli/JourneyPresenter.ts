@@ -1,22 +1,9 @@
 import pc from 'picocolors';
 
+import { renderTable } from '../../../shared-kernel/adapters/renderTable.js';
 import type { Journey } from '../../domain/Journey.js';
 
 const LIST_HEADERS = ['ID', 'NAME', 'START URL', 'STEPS', 'CREATED AT'] as const;
-
-function padEnd(value: string, width: number): string {
-  return value.length >= width ? value : value + ' '.repeat(width - value.length);
-}
-
-function renderTable(header: readonly string[], rows: readonly string[][]): string {
-  const widths = header.map((cell, index) =>
-    Math.max(cell.length, ...rows.map((row) => row[index]?.length ?? 0)),
-  );
-  const renderRow = (cells: readonly string[]): string =>
-    cells.map((cell, index) => padEnd(cell, widths[index] ?? cell.length)).join('  ');
-
-  return [renderRow(header), ...rows.map(renderRow)].join('\n');
-}
 
 function orderedSteps(journey: Journey): Journey['steps'] {
   return [...journey.steps].sort((a, b) => a.order - b.order);

@@ -240,11 +240,15 @@ fakes, but not that the CLI plumbing (`RunPlaybookController`,
 
 - Step 5: prints one `FAIL`/`PASS`/`PASS` line (in entry order) and an
   overall `FAILED` summary, because the first entry's own
-  `continueOnFailure: true` lets the run proceed past it; exits `1`
-  (`overallStatus` is `'failed'` since not every entry passed).
+  `continueOnFailure: true` lets the run proceed past it. Exits `0`: a
+  playbook run's own pass/fail is data in the output, not a CLI-level
+  failure (unlike `journey run`/`template run`, which do exit non-zero on a
+  failed run) — `overallStatus` in the printed/`--json` output is `'failed'`
+  since not every entry passed, but the process exit code stays `0`.
 - Step 6: prints `FAIL`/`SKIP`/`SKIP` — `--stop-on-first-failure` overrides
   the first entry's stored `continueOnFailure` and halts the run, so
-  entries 2-3 are recorded `'skipped'` without being run; exits `1`.
+  entries 2-3 are recorded `'skipped'` without being run. Exits `0` for the
+  same reason as step 5.
 - Step 7: `playbook runs` lists both runs in a table with their
   `overallStatus`; `playbook show-run` reprints the same per-entry detail
   as step 5/6's live output for the chosen run id.

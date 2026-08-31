@@ -65,8 +65,13 @@ module.exports = {
               'commander',
               'acorn',
               'acorn-walk',
-              'node:child_process',
-              'node:fs',
+              'picocolors',
+            ],
+            patterns: [
+              {
+                group: ['node:*'],
+                message: 'domain/application must not import Node.js builtins (Clean Architecture: keep runtime/platform concerns in adapters/infrastructure).',
+              },
             ],
           },
         ],

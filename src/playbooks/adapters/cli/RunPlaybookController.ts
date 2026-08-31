@@ -51,8 +51,10 @@ export class RunPlaybookController {
       console.log(options.json === true ? this.presenter.toJson(result) : this.presenter.present(result));
     }
 
-    if (result.overallStatus === 'failed') {
-      process.exitCode = 1;
-    }
+    // A playbook run's own pass/fail is data in the output, not a CLI-level
+    // failure (unlike `journey run`/`template run`, which DO exit non-zero on
+    // a failed run). This command only exits non-zero for a genuine CLI-level
+    // error (bad playbook id, use-case throw), handled by the caller's
+    // runAction catch-all.
   }
 }
