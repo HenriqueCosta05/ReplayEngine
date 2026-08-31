@@ -7,6 +7,15 @@ export type { SupportedBrowser };
 export interface RunOptions {
   browser: SupportedBrowser;
   storageStatePath?: string;
+  /**
+   * The profile actually resolved and used for THIS run (`--profile` /
+   * `entry.profileOverride`), as opposed to whatever profile (if any) the
+   * journey was recorded under. When omitted entirely (caller resolved no
+   * profile for this run), the adapter falls back to the journey's own
+   * recorded `profileId` - see the WHY comment at that fallback in
+   * `PlaywrightStepInterpreter.run` for the exact distinction this rests on.
+   */
+  profileId?: string;
   keepTrace: boolean;
   tracePath?: string;
   /**

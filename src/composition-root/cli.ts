@@ -377,7 +377,9 @@ export function buildProgram(): Command {
 
   playbook
     .command('run')
-    .description('Run every entry of a playbook, in order, against a real browser')
+    .description(
+      'Run every entry of a playbook, in order, against a real browser. Always exits 0, even if entries fail - check the output for pass/fail.',
+    )
     .argument('<id>', 'Playbook id')
     .option('--stop-on-first-failure', 'Halt the run on the first failing entry, overriding each entry\'s own continue-on-failure', false)
     .option('--keep-trace', 'Save a Playwright trace file for each entry of this run', false)

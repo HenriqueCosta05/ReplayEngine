@@ -179,10 +179,26 @@ export class PlaywrightStepInterpreter implements JourneyRunnerPort {
       await browser?.close().catch(() => undefined);
     }
 
+    // WHY: `opts.profileId ?? journey.profileId` - an explicit `--profile`/
+    // `profileOverride` (surfaced by a use case as `opts.profileId`) always
+    // wins and is what gets recorded, since that is the identity THIS run
+    // actually used. When the caller passes no `opts.profileId` at all,
+    // TypeScript's `undefined` gives no way to distinguish "the use case
+    // deliberately resolved no profile for this run" from "the use case
+    // never resolves a profile in the first place" - there is no separate
+    // sentinel for either case anywhere upstream - so plain absence is
+    // treated as "this run doesn't override the journey's own identity" and
+    // falls back to whatever profile the journey was recorded under. This
+    // keeps a bare `journey run`/`template run` (no `--profile`) reporting
+    // the journey's original profile, exactly as it did before this port
+    // gained `profileId`, while `--profile`/`profileOverride` now correctly
+    // overrides it instead of being silently discarded.
+    const effectiveProfileId = opts.profileId ?? journey.profileId;
+
     return createJourneyRunResult({
       id: runId,
       journeyId: journey.id,
-      ...(journey.profileId !== undefined ? { profileId: journey.profileId } : {}),
+      ...(effectiveProfileId !== undefined ? { profileId: effectiveProfileId } : {}),
       startedAt,
       finishedAt: this.clock.now(),
       stepResults,

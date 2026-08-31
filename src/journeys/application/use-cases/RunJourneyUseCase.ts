@@ -50,6 +50,7 @@ export class RunJourneyUseCase {
     return this.runner.run(journey, {
       browser: input.browser,
       storageStatePath: input.storageStatePath ?? resolvedStorageStatePath,
+      profileId: input.profileId,
       keepTrace: input.keepTrace,
       tracePath: input.tracePath,
     });

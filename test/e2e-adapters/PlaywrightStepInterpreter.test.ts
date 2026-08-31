@@ -236,6 +236,36 @@ describe('PlaywrightStepInterpreter (chromium-only behaviours)', () => {
     }
   });
 
+  it('records opts.profileId (the profile actually used for this run) over the journey\'s own recorded profileId', async () => {
+    const journey = createJourney({
+      id: 'journey-under-test',
+      name: 'Fixture journey',
+      startUrl: `${server.origin}/landing.html`,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      profileId: 'profile-recorded',
+      steps: [createStep({ id: 's1', order: 0, action: createAction({ kind: 'goto', url: `${server.origin}/landing.html` }) })],
+    });
+
+    const result = await interpreter().run(journey, { browser: 'chromium', keepTrace: false, profileId: 'profile-override' });
+
+    expect(result.profileId).toBe('profile-override');
+  });
+
+  it('falls back to the journey\'s own recorded profileId when opts.profileId is not given', async () => {
+    const journey = createJourney({
+      id: 'journey-under-test',
+      name: 'Fixture journey',
+      startUrl: `${server.origin}/landing.html`,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      profileId: 'profile-recorded',
+      steps: [createStep({ id: 's1', order: 0, action: createAction({ kind: 'goto', url: `${server.origin}/landing.html` }) })],
+    });
+
+    const result = await interpreter().run(journey, { browser: 'chromium', keepTrace: false });
+
+    expect(result.profileId).toBe('profile-recorded');
+  });
+
   it('reports a launch-time failure as a top-level run error, not as a passed run', async () => {
     const journey = journeyOf({ kind: 'goto', url: `${server.origin}/landing.html` });
 

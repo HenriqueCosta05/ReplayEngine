@@ -76,14 +76,41 @@ export class RunPlaybookUseCase {
         continue;
       }
 
-      const journey = await this.resolveJourney(entry);
-      const storageStatePath = await this.resolveStorageStatePath(entry.profileOverride);
+      // WHY: journey/template resolution (`resolveJourney`) and profile
+      // resolution (`resolveStorageStatePath`) both throw `NotFoundError`
+      // for a bad id. Left uncaught, that would abort the whole `execute()`
+      // call and discard every result already collected from prior entries
+      // in this loop - contradicting the very 'failed'/'skipped' resilience
+      // vocabulary this use case exists to produce. An unresolvable entry is
+      // just another kind of entry failure, so it is caught here and folded
+      // into the same failed-entry / halt-or-continue path a failed *run*
+      // already goes through below, rather than being allowed to skip it.
+      let journey: Journey;
+      let storageStatePath: string | undefined;
+      try {
+        journey = await this.resolveJourney(entry);
+        storageStatePath = await this.resolveStorageStatePath(entry.profileOverride);
+      } catch (error) {
+        entryResults.push({
+          entryId: entry.id,
+          status: 'failed',
+          stepResults: [],
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        if (!this.effectiveContinueOnFailure(entry, input)) {
+          haltRemaining = true;
+        }
+        continue;
+      }
+
       const tracePath =
         input.keepTrace && input.tracePathFor !== undefined ? input.tracePathFor(entry.id) : undefined;
 
       const runResult = await this.runner.run(journey, {
         browser: input.browser,
         storageStatePath,
+        profileId: entry.profileOverride,
         keepTrace: input.keepTrace,
         tracePath,
       });
@@ -103,17 +130,8 @@ export class RunPlaybookUseCase {
         error: runResult.error,
       });
 
-      if (status === 'failed') {
-        // WHY: --stop-on-first-failure is a GLOBAL override - when the CLI
-        // passes it, every entry is treated as continueOnFailure:false
-        // regardless of what is actually stored on that entry, because a
-        // caller who explicitly asks the whole run to halt on first failure
-        // means that to win over any individual entry's saved preference.
-        // Without the flag, the failed entry's own stored value decides.
-        const effectiveContinueOnFailure = input.stopOnFirstFailure === true ? false : entry.continueOnFailure;
-        if (!effectiveContinueOnFailure) {
-          haltRemaining = true;
-        }
+      if (status === 'failed' && !this.effectiveContinueOnFailure(entry, input)) {
+        haltRemaining = true;
       }
     }
 
@@ -129,6 +147,19 @@ export class RunPlaybookUseCase {
     await this.runResultRepository.save(result);
 
     return result;
+  }
+
+  /**
+   * WHY: --stop-on-first-failure is a GLOBAL override - when the CLI passes
+   * it, every entry is treated as continueOnFailure:false regardless of
+   * what is actually stored on that entry, because a caller who explicitly
+   * asks the whole run to halt on first failure means that to win over any
+   * individual entry's saved preference. Without the flag, the failed
+   * entry's own stored value decides. Shared by both failure paths (a
+   * resolution failure and a failed run) so they halt/continue identically.
+   */
+  private effectiveContinueOnFailure(entry: PlaybookEntry, input: RunPlaybookInput): boolean {
+    return input.stopOnFirstFailure === true ? false : entry.continueOnFailure;
   }
 
   private async resolveJourney(entry: PlaybookEntry): Promise<Journey> {

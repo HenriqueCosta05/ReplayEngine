@@ -91,7 +91,48 @@ describe('RunJourneyUseCase', () => {
     });
 
     expect(authStateProvider.resolveCalls).toEqual([profile]);
-    expect(runner.calls[0]?.opts).toMatchObject({ storageStatePath: '/tmp/admin-state.json' });
+    expect(runner.calls[0]?.opts).toMatchObject({ storageStatePath: '/tmp/admin-state.json', profileId: 'profile-1' });
+  });
+
+  it('threads input.profileId through to the runner as opts.profileId, so the interpreter records the profile actually used for this run', async () => {
+    const repository = new FakeJourneyRepository();
+    const journey = buildJourney();
+    await repository.save(journey);
+
+    const runner = new FakeJourneyRunnerPort();
+    const profileRepository = new FakeProfileRepository();
+    profileRepository.seed(
+      createUserProfile({
+        id: 'profile-2',
+        name: 'other',
+        authStrategy: createAuthStrategy({ type: 'storageState', filePath: '/tmp/other-state.json' }),
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+    );
+    const authStateProvider = new FakeAuthStateProviderPort();
+    authStateProvider.setResolveResult({ storageStatePath: '/tmp/other-state.json' });
+    const useCase = new RunJourneyUseCase(repository, runner, profileRepository, authStateProvider);
+
+    await useCase.execute({
+      journeyId: journey.id,
+      browser: 'chromium',
+      keepTrace: false,
+      profileId: 'profile-2',
+    });
+
+    expect(runner.calls[0]?.opts.profileId).toBe('profile-2');
+  });
+
+  it('leaves opts.profileId undefined when no --profile is given, so the interpreter falls back to the journey\'s own recorded profile', async () => {
+    const repository = new FakeJourneyRepository();
+    const journey = buildJourney();
+    await repository.save(journey);
+    const runner = new FakeJourneyRunnerPort();
+    const useCase = new RunJourneyUseCase(repository, runner, new FakeProfileRepository(), new FakeAuthStateProviderPort());
+
+    await useCase.execute({ journeyId: journey.id, browser: 'chromium', keepTrace: false });
+
+    expect(runner.calls[0]?.opts.profileId).toBeUndefined();
   });
 
   it('lets an explicit storageStatePath win over a resolved profile one', async () => {

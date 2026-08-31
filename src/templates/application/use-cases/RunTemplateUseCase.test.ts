@@ -135,7 +135,32 @@ describe('RunTemplateUseCase', () => {
     });
 
     expect(authStateProvider.resolveCalls).toEqual([profile]);
-    expect(runner.calls[0]?.opts).toMatchObject({ storageStatePath: '/tmp/admin-state.json' });
+    expect(runner.calls[0]?.opts).toMatchObject({ storageStatePath: '/tmp/admin-state.json', profileId: 'profile-1' });
+  });
+
+  it('threads input.profileId through to the runner as opts.profileId, so the interpreter records the profile actually used for this run', async () => {
+    const { templateRepository, runner, profileRepository, authStateProvider, useCase } = buildUseCase();
+    const template = buildTemplate();
+    await templateRepository.save(template);
+    profileRepository.seed(
+      createUserProfile({
+        id: 'profile-2',
+        name: 'other',
+        authStrategy: createAuthStrategy({ type: 'storageState', filePath: '/tmp/other-state.json' }),
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+    );
+    authStateProvider.setResolveResult({ storageStatePath: '/tmp/other-state.json' });
+
+    await useCase.execute({
+      templateId: template.id,
+      values: { username: 'alice' },
+      browser: 'chromium',
+      keepTrace: false,
+      profileId: 'profile-2',
+    });
+
+    expect(runner.calls[0]?.opts.profileId).toBe('profile-2');
   });
 
   it('throws NotFoundError when profileId does not resolve to an existing profile, without running', async () => {

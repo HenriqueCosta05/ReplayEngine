@@ -34,7 +34,8 @@ Source imports point inward only:
 - **`shared-kernel/`** — the small set of ports/adapters genuinely shared
   across every feature (`ClockPort`, `IdGeneratorPort`, and their concrete
   adapters). It follows the same `domain/`/`application/`/`adapters/`
-  layering as any feature.
+  layering as any feature. It also holds `renderTable.ts`, a presentation
+  utility shared by every feature's CLI table output.
 
 Cross-feature dependencies are allowed at the `application/ports` and
 `adapters` level (e.g. `profiles` depends on `journeys`' `JourneyRunnerPort`
@@ -50,10 +51,10 @@ The dependency rule above is not just convention — it is enforced by
 - `application` may not import `adapters` or `infrastructure`.
 - A `no-restricted-imports` override scoped to `src/**/domain/**` and
   `src/**/application/**` additionally bans importing `playwright`,
-  `@playwright/test`, `commander`, `acorn`, `acorn-walk`,
-  `node:child_process`, and `node:fs` directly in those layers, even
-  where the boundaries rule alone wouldn't catch it (e.g. importing a
-  library rather than another element type).
+  `@playwright/test`, `commander`, `acorn`, `acorn-walk`, and
+  `picocolors` by name, plus any `node:*` builtin via a pattern, directly
+  in those layers, even where the boundaries rule alone wouldn't catch it
+  (e.g. importing a library rather than another element type).
 
 Because the project uses `moduleResolution: NodeNext` (relative imports
 are written as `./Foo.js` even though the source file is `Foo.ts`), the
@@ -121,7 +122,22 @@ Every entity is persisted as one JSON file per record under
 `./.qamachine/<collection>/<id>.json` (journeys, templates, playbooks,
 playbook-runs, profiles), via a small generic `JsonFileStore<T>`
 infrastructure helper reused by every feature's repository adapter.
-Playwright auth state lives at
-`./.qamachine/profiles/<profileId>/storageState.json`. Trace files are
-opt-in only (`--keep-trace`), written to
-`./.qamachine/traces/<runId>/<entryId>.zip`.
+
+Profile auth state has **no default location**: `AuthStrategy`'s
+`storageState`/`loginJourney` variants both require the caller to supply a
+non-empty path explicitly (`profile add --storage-state-path` /
+`--login-storage-state-path`), and nothing in the codebase resolves a
+`<home>`-relative default for it.
+
+Trace files are opt-in only (`--keep-trace`) and use three distinct,
+deliberately-unmerged flat naming conventions - one per command that can
+produce a trace, encoding what that command ran (see each controller's
+`tracesDirPath` handling):
+
+- `journey run` (`RunJourneyController`): `<journeyId>-<uuid>.zip`
+- `template run` (`RunTemplateController`): `<templateId>-<uuid>.zip`
+- `playbook run` (`RunPlaybookController`), one trace per entry:
+  `<playbookId>-<entryId>-<uuid>.zip`
+
+All three live flat under the traces directory (no nested
+`<runId>/<entryId>/` subfolder).
